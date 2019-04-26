@@ -1,17 +1,29 @@
 package gyndns
 
 import (
-	"github.com/miekg/dns"
+	"context"
 	"fmt"
 	"log"
+
+	"github.com/miekg/dns"
 )
 
 const TTL = 16
 
-func (g *GynDNS) runDNS(errChan chan error) {
+func (g *GynDNS) runDNS(ctxt context.Context, errChan chan error) {
 	addr := fmt.Sprintf("%s:%d", g.DNSAddress, g.DNSPort)
 	log.Printf("Starting DNS server at %s...", addr)
-	errChan <- dns.ListenAndServe(addr, "udp", g)
+	srv := &dns.Server{Addr: addr, Net: "udp", Handler: g}
+
+	go func() {
+		if err := srv.ListenAndServe(); err != nil {
+			errChan <- err
+		}
+	}()
+	go func() {
+		<-ctxt.Done()
+		srv.Shutdown()
+	}()
 }
 
 func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {

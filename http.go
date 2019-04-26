@@ -1,10 +1,11 @@
 package gyndns
 
 import (
-	"net/http"
+	"context"
+	"fmt"
 	"log"
 	"net"
-	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -12,11 +13,21 @@ const HOSTNAME_KEY = "hostname"
 const IP_KEY = "myip"
 const IP_HEADER = "X-Real-IP"
 
-func (g *GynDNS) runHTTP(errChan chan error) {
+func (g *GynDNS) runHTTP(ctxt context.Context, errChan chan error) {
 	addr := fmt.Sprintf("%s:%d", g.HTTPAddress, g.HTTPPort)
 	log.Printf("Starting HTTP server at %s...", addr)
 
-	errChan <- http.ListenAndServe(addr, g)
+	hs := &http.Server{Addr: addr, Handler: g}
+
+	go func() {
+		if err := hs.ListenAndServe(); err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+	go func() {
+		<-ctxt.Done()
+		hs.Shutdown(ctxt)
+	}()
 }
 
 func (g *GynDNS) ServeHTTP(rw http.ResponseWriter, r *http.Request) {

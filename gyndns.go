@@ -1,9 +1,13 @@
 package gyndns
 
 import (
-	"net"
-	"sync"
+	"context"
 	"log"
+	"net"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 )
 
 type Config struct {
@@ -72,9 +76,28 @@ func New(params *Params) *GynDNS {
 	return g
 }
 
-func (g *GynDNS) Run() {
-	go g.runHTTP(g.errChan)
-	go g.runDNS(g.errChan)
+func (g *GynDNS) Run(ctxt context.Context) {
+	ctxthttp, cancelhttp := context.WithCancel(ctxt)
+	ctxtdns, canceldns := context.WithCancel(ctxt)
 
-	log.Fatal(<-g.errChan)
+	cancel := func() {
+		cancelhttp()
+		canceldns()
+	}
+
+	go g.runHTTP(ctxthttp, g.errChan)
+	go g.runDNS(ctxtdns, g.errChan)
+
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
+
+	for {
+		select {
+		case <-stop:
+			cancel()
+			break
+		case err := <-g.errChan:
+			panic(err)
+		}
+	}
 }
