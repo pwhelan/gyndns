@@ -1,13 +1,14 @@
-package gyndns
+package main
 
 import (
 	"context"
 	"log"
-	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
+	"time"
+
+	"github.com/gomodule/redigo/redis"
 )
 
 type Config struct {
@@ -28,8 +29,7 @@ type GynDNS struct {
 
 	users map[Username]User
 
-	leases map[string]net.IP
-	lMutex sync.RWMutex
+	pool *redis.Pool
 
 	errChan chan error
 }
@@ -49,6 +49,18 @@ var defaultConfig = Config{
 	DNSPort:     5533,
 }
 
+func newPool() *redis.Pool {
+	return &redis.Pool{
+		MaxIdle:     3,
+		IdleTimeout: 240 * time.Second,
+		// Dial or DialContext must be set. When both are set,
+		// DialContext takes precedence over Dial.
+		Dial: func() (redis.Conn, error) {
+			return redis.DialURL(os.Getenv("REDIS_URL"))
+		},
+	}
+}
+
 func New(params *Params) *GynDNS {
 	if params == nil {
 		log.Fatal("Nil parametes supplied")
@@ -62,7 +74,7 @@ func New(params *Params) *GynDNS {
 		Config:  params.Config,
 		errChan: make(chan error),
 		users:   make(map[Username]User),
-		leases:  make(map[string]net.IP),
+		pool:    newPool(),
 	}
 
 	if len(params.Users) == 0 {
@@ -76,7 +88,8 @@ func New(params *Params) *GynDNS {
 	return g
 }
 
-func (g *GynDNS) Run(ctxt context.Context) {
+func (g *GynDNS) Run() {
+	ctxt := context.Background()
 	ctxthttp, cancelhttp := context.WithCancel(ctxt)
 	ctxtdns, canceldns := context.WithCancel(ctxt)
 
@@ -94,8 +107,9 @@ func (g *GynDNS) Run(ctxt context.Context) {
 	for {
 		select {
 		case <-stop:
+			log.Println("Shutting down...")
 			cancel()
-			break
+			return
 		case err := <-g.errChan:
 			panic(err)
 		}

@@ -1,10 +1,9 @@
 package main
 
 import (
-	"roob.re/gyndns"
-	"os"
 	"encoding/json"
 	"log"
+	"os"
 )
 
 func main() {
@@ -13,11 +12,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	params := gyndns.Params{}
+	params := Params{}
 	err = json.NewDecoder(gynFile).Decode(&params)
 	if err != nil {
 		log.Fatalf("Error parsing gyndns.json: %v", err)
 	}
 
-	gyndns.New(&params).Run()
+	New(&params).Run()
 }

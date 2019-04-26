@@ -1,10 +1,12 @@
-package gyndns
+package main
 
 import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 
+	"github.com/gomodule/redigo/redis"
 	"github.com/miekg/dns"
 )
 
@@ -13,6 +15,7 @@ const TTL = 16
 func (g *GynDNS) runDNS(ctxt context.Context, errChan chan error) {
 	addr := fmt.Sprintf("%s:%d", g.DNSAddress, g.DNSPort)
 	log.Printf("Starting DNS server at %s...", addr)
+
 	srv := &dns.Server{Addr: addr, Net: "udp", Handler: g}
 
 	go func() {
@@ -42,25 +45,26 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 
 			response.Question = append(response.Question, q)
 
-			g.lMutex.RLock()
-			ip, found := g.leases[q.Name]
-			g.lMutex.RUnlock()
+			r := g.pool.Get()
+			defer r.Close()
+			ip, err := redis.String(r.Do("GET", fmt.Sprintf("hostname/%s", q.Name)))
 
-			if found {
-				response.Answer = append(response.Answer, &dns.A{
-					Hdr: dns.RR_Header{
-						Name:   q.Name,
-						Rrtype: dns.TypeA,
-						Class:  dns.ClassINET,
-						Ttl:    TTL,
-					},
-					A: ip,
-				})
-				log.Println(q.Name + " A " + ip.String())
-			} else {
+			if err != nil {
 				response.Rcode = dns.RcodeNameError
+				log.Printf("ERROR: %s\n", err)
 				log.Println("Hostname " + q.Name + " not found in map")
 			}
+			ipaddr := net.ParseIP(ip)
+			response.Answer = append(response.Answer, &dns.A{
+				Hdr: dns.RR_Header{
+					Name:   q.Name,
+					Rrtype: dns.TypeA,
+					Class:  dns.ClassINET,
+					Ttl:    TTL,
+				},
+				A: ipaddr,
+			})
+			log.Println(q.Name + " A " + ip)
 
 			rw.WriteMsg(response)
 

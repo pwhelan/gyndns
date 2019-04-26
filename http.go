@@ -1,4 +1,4 @@
-package gyndns
+package main
 
 import (
 	"context"
@@ -87,11 +87,12 @@ func (g *GynDNS) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		hostname = hostname + "."
 	}
 
-	log.Printf("Updating %s to IP %s via request from %s", hostname, ip.String(), username)
+	log.Printf("Updating %s to -> %s via request from %s", hostname, ip.String(), username)
 
-	g.lMutex.Lock()
-	g.leases[hostname] = ip
-	g.lMutex.Unlock()
-
-	log.Print(g.leases)
+	redis := g.pool.Get()
+	defer redis.Close()
+	_, err := redis.Do("SET", fmt.Sprintf("hostname/%s", hostname), ip)
+	if err != nil {
+		log.Printf("Redis Error: %s\n", err)
+	}
 }
