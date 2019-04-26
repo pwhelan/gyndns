@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -36,10 +37,15 @@ type GynDNS struct {
 
 type Username string
 
+type hostnameMatch struct {
+	Levels []string
+}
+
 type User struct {
-	Username Username
-	Password string
-	Names    []string
+	Username    Username
+	Password    string
+	Names       []string
+	nameMatches []hostnameMatch
 }
 
 var defaultConfig = Config{
@@ -47,6 +53,19 @@ var defaultConfig = Config{
 	HTTPPort:    8000,
 	DNSAddress:  "127.0.0.1",
 	DNSPort:     5533,
+}
+
+func (hm hostnameMatch) Match(hostname string) bool {
+	hs := strings.Split(hostname, ".")
+	if len(hs) != len(hm.Levels) {
+		return false
+	}
+	for i, l := range hs {
+		if hm.Levels[i] != "*" && hm.Levels[i] != l {
+			return false
+		}
+	}
+	return true
 }
 
 func newPool() *redis.Pool {
@@ -82,7 +101,17 @@ func New(params *Params) *GynDNS {
 	}
 
 	for _, u := range params.Users {
-		g.users[u.Username] = u
+		nu := User{
+			Username:    u.Username,
+			Password:    u.Password,
+			nameMatches: make([]hostnameMatch, len(u.Names)),
+		}
+		for i, n := range u.Names {
+			hm := hostnameMatch{}
+			hm.Levels = strings.Split(n, ".")
+			nu.nameMatches[i] = hm
+		}
+		g.users[u.Username] = nu
 	}
 
 	return g

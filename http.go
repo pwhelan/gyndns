@@ -30,6 +30,15 @@ func (g *GynDNS) runHTTP(ctxt context.Context, errChan chan error) {
 	}()
 }
 
+func checkHostnameAuth(user User, hostname string) bool {
+	for _, hm := range user.nameMatches {
+		if hm.Match(hostname) == true {
+			return true
+		}
+	}
+	return false
+}
+
 func (g *GynDNS) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	username, password, ok := r.BasicAuth()
 	if !ok || username == "" || password == "" {
@@ -70,15 +79,8 @@ func (g *GynDNS) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var found bool
-	for _, name := range user.Names {
-		if name == hostname {
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	authed := checkHostnameAuth(user, hostname)
+	if !authed {
 		http.Error(rw, "User "+username+" is not allowed to update "+hostname, 403)
 		return
 	}
