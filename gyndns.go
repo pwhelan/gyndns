@@ -59,7 +59,7 @@ var defaultConfig = Config{
 }
 
 func (hm hostnameMatch) Match(hostname string) bool {
-	hs := strings.Split(hostname, ".")
+	hs := strings.Split(strings.ToLower(hostname), ".")
 	if len(hs) != len(hm.Levels) {
 		return false
 	}
@@ -111,7 +111,7 @@ func New(params *Params) *GynDNS {
 		}
 		for i, n := range u.Names {
 			hm := hostnameMatch{}
-			hm.Levels = strings.Split(n, ".")
+			hm.Levels = strings.Split(strings.ToLower(n), ".")
 			nu.nameMatches[i] = hm
 		}
 		g.users[u.Username] = nu
