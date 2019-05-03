@@ -18,6 +18,9 @@ type Config struct {
 
 	DNSAddress string
 	DNSPort    uint16
+
+	Cert string
+	Key  string
 }
 
 type Params struct {

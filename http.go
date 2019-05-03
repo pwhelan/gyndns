@@ -20,7 +20,13 @@ func (g *GynDNS) runHTTP(ctxt context.Context, errChan chan error) {
 	hs := &http.Server{Addr: addr, Handler: g}
 
 	go func() {
-		if err := hs.ListenAndServe(); err != http.ErrServerClosed {
+		var err error
+		if g.Config.Cert != "" && g.Config.Key != "" {
+			err = hs.ListenAndServeTLS(g.Config.Cert, g.Config.Key)
+		} else {
+			err = hs.ListenAndServe()
+		}
+		if err != http.ErrServerClosed {
 			errChan <- err
 		}
 	}()
