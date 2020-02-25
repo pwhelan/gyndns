@@ -68,7 +68,32 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			rw.WriteMsg(response)
-			break
+		/*
+		case dns.TypeCAA:
+			response := &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:            r.Id,
+					Response:      true,
+					Authoritative: true,
+				},
+			}
+
+			response.Question = append(response.Question, q)
+
+			record := new(dns.CAA)
+			record.Hdr = dns.RR_Header{
+				Name: q.Name,
+				Rrtype: dns.TypeCAA,
+				Class: dns.ClassINET,
+				Ttl: 0,
+			}
+			record.Tag = "issue"
+			record.Value = "letsencrypt.org"
+			//record.Flag = 1
+			response.Answer = append(response.Answer, record)
+			
+			rw.WriteMsg(response)
+		*/
 		case dns.TypeA:
 			log.Printf("Searching for hostname '%s'", q.Name)
 			response := &dns.Msg{
@@ -105,7 +130,6 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			rw.WriteMsg(response)
-			break
 		default:
 			log.Printf("Unsupported question type %d", q.Qtype)
 			log.Printf("%+v\n", q)
@@ -116,7 +140,7 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 					Authoritative: false,
 				},
 			}
-			response.Rcode = dns.RcodeNotImplemented
+			response.Rcode = dns.RcodeSuccess
 			rw.WriteMsg(response)
 			//response.Rcode = dns.RcodeNameError
 		}
