@@ -11,6 +11,7 @@ import (
 	"github.com/miekg/dns"
 )
 
+
 const TTL = 16
 
 func (g *GynDNS) runDNS(ctxt context.Context, errChan chan error) {
@@ -68,32 +69,6 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			rw.WriteMsg(response)
-		/*
-		case dns.TypeCAA:
-			response := &dns.Msg{
-				MsgHdr: dns.MsgHdr{
-					Id:            r.Id,
-					Response:      true,
-					Authoritative: true,
-				},
-			}
-
-			response.Question = append(response.Question, q)
-
-			record := new(dns.CAA)
-			record.Hdr = dns.RR_Header{
-				Name: q.Name,
-				Rrtype: dns.TypeCAA,
-				Class: dns.ClassINET,
-				Ttl: 0,
-			}
-			record.Tag = "issue"
-			record.Value = "letsencrypt.org"
-			//record.Flag = 1
-			response.Answer = append(response.Answer, record)
-			
-			rw.WriteMsg(response)
-		*/
 		case dns.TypeA:
 			log.Printf("Searching for hostname '%s'", q.Name)
 			response := &dns.Msg{
@@ -130,6 +105,87 @@ func (g *GynDNS) ServeDNS(rw dns.ResponseWriter, r *dns.Msg) {
 			}
 
 			rw.WriteMsg(response)
+		case dns.TypeCAA:
+			log.Printf("Searching for hostname '%s'", q.Name)
+			response := &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:            r.Id,
+					Response:      true,
+					Authoritative: true,
+				},
+			}
+
+			response.Question = append(response.Question, q)
+
+			r := g.pool.Get()
+			defer r.Close()
+			_, err := redis.String(r.Do("GET",
+				fmt.Sprintf("hostname/%s", strings.ToLower(q.Name))))
+
+			if err != nil {
+				response.Rcode = dns.RcodeNameError
+				log.Printf("ERROR: %s\n", err)
+				log.Println("Hostname " + q.Name + " not found in map")
+			} else {
+				response.Answer = append(response.Answer, &dns.CAA{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeCAA,
+						Class:  dns.ClassINET,
+						Ttl:    TTL,
+					},
+					Flag: 0,
+					Tag: "issue",
+					Value: "letsencrypt.org",
+				})
+				log.Println(q.Name + " CAA ")
+			}
+
+			rw.WriteMsg(response)
+		// type==2
+		case dns.TypeNS:
+			log.Printf("Searching for hostname '%s'", q.Name)
+			response := &dns.Msg{
+				MsgHdr: dns.MsgHdr{
+					Id:            r.Id,
+					Response:      true,
+					Authoritative: true,
+				},
+			}
+
+			response.Question = append(response.Question, q)
+
+			r := g.pool.Get()
+			defer r.Close()
+			_, err := redis.String(r.Do("GET",
+				fmt.Sprintf("hostname/%s", strings.ToLower(q.Name))))
+
+			if err != nil {
+				response.Rcode = dns.RcodeNameError
+				log.Printf("ERROR: %s\n", err)
+				log.Println("Hostname " + q.Name + " not found in map")
+			} else {
+				response.Answer = append(response.Answer, &dns.NS{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeCAA,
+						Class:  dns.ClassINET,
+						Ttl:    TTL,
+					},
+					Ns: "skizzordz.exis.cl",
+				})
+				log.Println(q.Name + " NS ")
+			}
+			rw.WriteMsg(response)
+		// type==6
+		case dns.TypeSOA:
+			fallthrough
+		// type==16
+		case dns.TypeTXT:
+			fallthrough
+		// type==28
+		case dns.TypeAAAA:
+			fallthrough
 		default:
 			log.Printf("Unsupported question type %d", q.Qtype)
 			log.Printf("%+v\n", q)
